@@ -1,0 +1,18 @@
+{
+  "package_id": "com.example.g2replyassist",
+  "edition": "202601",
+  "name": "G2 Reply Assist",
+  "version": "0.1.0",
+  "min_app_version": "2.0.0",
+  "min_sdk_version": "0.0.10",
+  "entrypoint": "index.html",
+  "permissions": [
+    { "name": "g2-microphone", "desc": "Capture audio from the glasses mic to transcribe Japanese speech." },
+    {
+      "name": "network",
+      "desc": "Stream audio to the reply-assist backend and receive reply suggestions.",
+      "whitelist": ["ws://YOUR-BACKEND-HOST:8787", "wss://YOUR-BACKEND-HOST"]
+    }
+  ],
+  "supported_languages": ["en"]
+}
