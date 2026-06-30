@@ -1,0 +1,211 @@
+G2 Reply Assist - KC Rack Server Setup
+=======================================
+Everything runs on your KC rack (Ubuntu, DGX Spark or machine with NVIDIA GPU).
+No Google Cloud account or Anthropic API key required.
+
+
+WHAT RUNS WHERE
+---------------
+[KC Rack]
+  - faster-whisper-server  (speech-to-text, port 8000)
+  - Ollama + Gemma model   (reply suggestions, port 11434)
+  - Node backend           (WebSocket server, port 8787)
+  - cloudflared            (Cloudflare Tunnel → exposes port 8787 as wss://your-hostname)
+
+[Glasses / Phone]
+  - Glasses app (.ehpk)    (no changes needed once backend URL is set)
+
+
+PREREQUISITES
+-------------
+- Ubuntu 22.04+ with NVIDIA GPU and drivers installed
+- Docker + NVIDIA Container Toolkit (for faster-whisper-server)
+- Node.js 18+ and npm
+- Ollama
+- cloudflared (Cloudflare Tunnel client)
+- Your repo checked out: git clone https://github.com/Harbl/DiceSociety ...
+  (or wherever you push g2-reply-assist)
+
+
+STEP 1 - INSTALL OLLAMA
+------------------------
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull the model (27B, needs ~54 GB disk for BF16, runs great on DGX Spark)
+ollama pull gemma3:27b
+
+# Verify it loaded
+ollama list
+
+# Note: if a newer Gemma 4 tag is available by the time you set this up,
+# update OLLAMA_MODEL in backend/.env to match the tag shown by `ollama list`.
+# Example: OLLAMA_MODEL=gemma3:27b-it-q8_0
+
+# Start Ollama as a background service (the installer usually does this automatically)
+# If not: sudo systemctl enable --now ollama
+# Or manually: ollama serve &
+
+
+STEP 2 - INSTALL FASTER-WHISPER-SERVER
+----------------------------------------
+# Uses Docker with NVIDIA GPU passthrough.
+# The image is ~5 GB; first pull takes a few minutes.
+
+docker run -d \
+  --name whisper \
+  --gpus all \
+  --restart unless-stopped \
+  -p 8000:8000 \
+  -e WHISPER__MODEL=large-v3 \
+  fedirz/faster-whisper-server:latest-cuda
+
+# Verify it's up (may take 30-60 seconds on first start for model download)
+curl http://localhost:8000/health
+
+# If you want to confirm Japanese works:
+# curl -X POST http://localhost:8000/v1/audio/transcriptions \
+#   -F "file=@some_japanese_audio.wav" \
+#   -F "model=Systran/faster-whisper-large-v3" \
+#   -F "language=ja"
+
+
+STEP 3 - SET UP THE NODE BACKEND
+----------------------------------
+# Copy the backend/ directory to your rack, then:
+
+cd /path/to/g2-reply-assist/backend
+
+npm install
+
+# Create your .env (copy from example and fill in)
+cp .env.example .env
+nano .env
+
+# Required values in .env:
+#   WS_TOKEN=<your-ws-token>   # from backend/.env on your dev machine
+#   PORT=8787
+#   WHISPER_URL=http://localhost:8000
+#   WHISPER_MODEL=Systran/faster-whisper-large-v3
+#   OLLAMA_URL=http://localhost:11434
+#   OLLAMA_MODEL=gemma3:27b
+
+# Test run (ctrl-c to stop)
+npm run start
+
+# You should see: g2-reply-assist backend listening on ws://0.0.0.0:8787
+
+# For permanent background operation, use PM2:
+npm install -g pm2
+pm2 start npm --name g2-backend -- start
+pm2 save
+pm2 startup   # follow the printed command to enable on boot
+
+
+STEP 4 - CLOUDFLARE TUNNEL
+----------------------------
+# Install cloudflared
+wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared-linux-amd64.deb
+
+# Log in (opens a browser window — do this on a machine with a browser, or use --url flag)
+cloudflared tunnel login
+
+# Create a named tunnel
+cloudflared tunnel create g2-reply-assist
+
+# The command prints a tunnel UUID. Note it.
+
+# Create the config file at ~/.cloudflared/config.yml:
+cat > ~/.cloudflared/config.yml << 'EOF'
+tunnel: <YOUR-TUNNEL-UUID>
+credentials-file: /home/<YOUR-USER>/.cloudflared/<YOUR-TUNNEL-UUID>.json
+
+ingress:
+  - hostname: g2.<your-domain>.com
+    service: ws://localhost:8787
+  - service: http_status:404
+EOF
+
+# Point the DNS record to the tunnel
+cloudflared tunnel route dns g2-reply-assist g2.<your-domain>.com
+
+# Run it (test first)
+cloudflared tunnel run g2-reply-assist
+
+# For permanent background operation:
+sudo cloudflared service install
+sudo systemctl enable --now cloudflared
+
+
+STEP 5 - UPDATE GLASSES APP AND REPACK
+----------------------------------------
+Once you know your tunnel hostname (e.g. g2.yourdomain.com), do these two things
+back on your Windows dev machine:
+
+1. Edit glasses-app/.env.local:
+   VITE_BACKEND_URL=wss://g2.yourdomain.com?token=<your-ws-token>
+
+2. Edit glasses-app/app.json, change the whitelist line:
+   "whitelist": ["wss://g2.yourdomain.com"]
+
+3. Rebuild and repack:
+   cd glasses-app
+   npm run build
+   npx evenhub pack app.json dist -o g2-reply-assist-v5.ehpk
+
+4. Upload g2-reply-assist-v5.ehpk to the Even Realities developer portal
+   and install on your glasses.
+
+
+STEP 6 - VERIFY END TO END
+----------------------------
+1. Start services on rack (whisper, ollama, backend, cloudflared)
+2. Check backend health:
+   curl -i -N -H "Upgrade: websocket" -H "Connection: Upgrade" \
+     -H "Sec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw==" \
+     -H "Sec-WebSocket-Version: 13" \
+     "https://g2.yourdomain.com?token=<your-ws-token>"
+   (should get HTTP 101 Switching Protocols)
+3. Put on glasses, open the app, say something in Japanese
+4. Watch backend logs: you should see "glasses connected" then after you speak,
+   a Whisper transcription request and then an Ollama call
+
+
+TUNING NOTES
+-------------
+- If the app triggers on background noise, increase SPEECH_THRESHOLD_RMS in
+  backend/src/localStt.ts (default: 600). Japanese speech in a typical room is
+  usually 1000-3000 RMS on s16le 16kHz.
+- If it cuts off the end of sentences, increase SILENCE_DURATION_MS (default: 1200ms).
+- If it waits too long between utterances, decrease SILENCE_DURATION_MS.
+- Ollama response time depends on GPU throughput. On DGX Spark with Gemma 3 27B
+  at BF16, expect ~1-2s per suggestion set.
+- Whisper large-v3 first inference after startup takes ~5s (model load).
+  Subsequent calls are typically under 1s for a short utterance.
+
+
+QUICK-REFERENCE PROMPTS FOR SETUP HELP
+----------------------------------------
+Use these prompts with Claude if you get stuck on any step:
+
+For faster-whisper-server Docker issues:
+"I'm setting up fedirz/faster-whisper-server on Ubuntu with an NVIDIA GPU.
+ When I run `docker run --gpus all -p 8000:8000 -e WHISPER__MODEL=large-v3
+ fedirz/faster-whisper-server:latest-cuda` I get this error: [paste error].
+ How do I fix it?"
+
+For Ollama model format issues:
+"I ran `ollama pull gemma3:27b` but the model tag in `ollama list` shows
+ [paste actual tag]. I need to update OLLAMA_MODEL in my .env to match.
+ Is [tag] the right value to use?"
+
+For Cloudflare Tunnel config issues:
+"I'm setting up a Cloudflare Tunnel on Ubuntu to expose a local WebSocket
+ server on port 8787 as wss://g2.yourdomain.com. My config.yml is: [paste].
+ I get this error: [paste]. How do I fix it?"
+
+For VAD threshold tuning:
+"My G2 glasses app is triggering speech detection on background noise.
+ The microphone delivers PCM s16le 16kHz mono. I'm using RMS energy with
+ a threshold of [current value]. What's a good starting value for a quiet
+ indoor environment vs a louder public space?"

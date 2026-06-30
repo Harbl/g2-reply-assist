@@ -8,8 +8,6 @@
     "start": "tsx src/server.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.71.0",
-    "@google-cloud/speech": "^7.4.0",
     "dotenv": "^16.4.5",
     "ws": "^8.18.0"
   },
