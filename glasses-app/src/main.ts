@@ -8,7 +8,11 @@ import {
 import { connectBackend, type ReplySuggestion } from './asr/stt'
 import { mountUi, mountSetupScreen, setStatus, setTranscript, setSuggestions } from './ui'
 
-// ── Persisted config keys ──────────────────────────────────────────────────
+// ── Config resolution (env vars → localStorage → setup screen) ────────────
+//
+// Vite bakes VITE_* env vars into the bundle at build time, so they survive
+// Even Hub clearing WebView storage between sessions. localStorage is kept as
+// a fallback for public/shared use when env vars aren't set.
 
 const LS_SERVER_URL = 'g2ra.serverUrl'
 const LS_TOKEN = 'g2ra.token'
@@ -19,7 +23,10 @@ function buildWsUrl(serverUrl: string, token: string): string {
   return u.toString()
 }
 
-function getSavedConfig(): { serverUrl: string; token: string } | null {
+function getConfig(): { serverUrl: string; token: string } | null {
+  const envUrl = import.meta.env.VITE_SERVER_URL as string | undefined
+  const envToken = import.meta.env.VITE_WS_TOKEN as string | undefined
+  if (envUrl && envToken) return { serverUrl: envUrl, token: envToken }
   const serverUrl = localStorage.getItem(LS_SERVER_URL)
   const token = localStorage.getItem(LS_TOKEN)
   if (serverUrl && token) return { serverUrl, token }
@@ -29,10 +36,9 @@ function getSavedConfig(): { serverUrl: string; token: string } | null {
 // ── Entry point ────────────────────────────────────────────────────────────
 
 ;(async () => {
-  const saved = getSavedConfig()
+  const saved = getConfig()
 
   if (!saved) {
-    // First run — show setup screen (no bridge needed, works on phone companion)
     mountSetupScreen(({ serverUrl, token }) => {
       localStorage.setItem(LS_SERVER_URL, serverUrl)
       localStorage.setItem(LS_TOKEN, token)
@@ -41,7 +47,6 @@ function getSavedConfig(): { serverUrl: string; token: string } | null {
     return
   }
 
-  // ── Normal app flow ──────────────────────────────────────────────────────
   // Destructure here so closures below see plain string types (not string | null).
   const { serverUrl: initServerUrl, token: initToken } = saved
 
