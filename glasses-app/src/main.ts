@@ -116,6 +116,58 @@ function buildWsUrl(serverUrl: string, token: string): string {
     return 'Listening…'
   }
 
+  // ── Simulator test panel ─────────────────────────────────────────────────
+  // Only mounts on localhost (evenhub-simulator / npm run dev), never on device.
+  if (window.location.hostname === 'localhost') {
+    const panel = document.createElement('div')
+    panel.style.cssText = 'margin:16px;padding:14px;border:1px dashed #3A3A3A;border-radius:10px;'
+    panel.innerHTML = `
+      <div style="font-size:11px;color:#555;margin-bottom:10px;letter-spacing:.05em;">SIMULATOR</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="sim-btn" id="sim-suggestions">Show suggestions</button>
+        <button class="sim-btn" id="sim-next">Next suggestion</button>
+        <button class="sim-btn" id="sim-listen">Reset to listening</button>
+      </div>
+      <style>
+        .sim-btn{padding:9px;border-radius:8px;border:1px solid #3A3A3A;background:#252525;color:#AAA;font-size:13px;cursor:pointer;}
+        .sim-btn:active{background:#3A3A3A;}
+      </style>
+    `
+    document.getElementById('app')?.appendChild(panel)
+
+    const mockSuggestions: ReplySuggestion[] = [
+      { japanese: '英語を話せますか？', romaji: 'Eigo wo hanasemasu ka?', gloss: 'Do you speak English?' },
+      { japanese: 'すみません、英語はわかりますか？', romaji: 'Sumimasen, eigo wa wakarimasu ka?', gloss: 'Excuse me, do you understand English?' },
+      { japanese: '英語で話してもいいですか？', romaji: 'Eigo de hanashite mo ii desu ka?', gloss: 'Is it okay if I speak in English?' },
+    ]
+
+    document.getElementById('sim-suggestions')?.addEventListener('click', () => {
+      mode = 'suggestions'
+      heardEnglish = 'Do you speak English?'
+      suggestions = mockSuggestions
+      pageIndex = 0
+      setSuggestions(heardEnglish, suggestions)
+      scheduleGlassesRender()
+    })
+    document.getElementById('sim-next')?.addEventListener('click', () => {
+      if (suggestions.length > 0) {
+        pageIndex = (pageIndex + 1) % suggestions.length
+        scheduleGlassesRender()
+      }
+    })
+    document.getElementById('sim-listen')?.addEventListener('click', () => {
+      mode = 'listening'
+      heardEnglish = ''
+      suggestions = []
+      pageIndex = 0
+      scheduleGlassesRender()
+    })
+
+    setStatus('listening', 'Simulator mode · use test buttons below')
+    return
+  }
+
+  // ── Backend connection ────────────────────────────────────────────────────
   const wsUrl = buildWsUrl(initServerUrl, initToken)
 
   const backend = connectBackend(
