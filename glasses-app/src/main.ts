@@ -136,9 +136,9 @@ function buildWsUrl(serverUrl: string, token: string): string {
     document.getElementById('app')?.appendChild(panel)
 
     const mockSuggestions: ReplySuggestion[] = [
-      { japanese: '英語を話せますか？', romaji: 'Eigo wo hanasemasu ka?', gloss: 'Do you speak English?' },
-      { japanese: 'すみません、英語はわかりますか？', romaji: 'Sumimasen, eigo wa wakarimasu ka?', gloss: 'Excuse me, do you understand English?' },
-      { japanese: '英語で話してもいいですか？', romaji: 'Eigo de hanashite mo ii desu ka?', gloss: 'Is it okay if I speak in English?' },
+      { japanese: 'はい、少し話せます。', romaji: 'Hai, sukoshi hanasemasu.', gloss: 'Yes, I can speak a little.' },
+      { japanese: 'すみません、あまり得意ではありません。', romaji: 'Sumimasen, amari tokui dewa arimasen.', gloss: 'Sorry, I\'m not very good at it.' },
+      { japanese: '日本語の方が得意です。', romaji: 'Nihongo no hō ga tokui desu.', gloss: 'I\'m better at Japanese.' },
     ]
 
     document.getElementById('sim-suggestions')?.addEventListener('click', () => {
