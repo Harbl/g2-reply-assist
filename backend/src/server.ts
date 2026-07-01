@@ -1,7 +1,9 @@
 import 'dotenv/config'
 import { IncomingMessage } from 'node:http'
 import { WebSocket, WebSocketServer } from 'ws'
+import { config, printConfig } from './config.js'
 import { LocalSttSession } from './localStt.js'
+import { GoogleSttSession } from './googleStt.js'
 import { generateReplySuggestions, type ReplySuggestion } from './suggest.js'
 
 const PORT = Number(process.env.PORT ?? 8787)
@@ -14,6 +16,8 @@ if (!WS_TOKEN) {
   console.error('WS_TOKEN is not set — refusing to start without auth.')
   process.exit(1)
 }
+
+printConfig()
 
 function verifyClient(
   { req }: { req: IncomingMessage },
@@ -69,7 +73,7 @@ function send(ws: WebSocket, payload: unknown) {
 
 wss.on('connection', ws => {
   console.log(`glasses connected (${wss.clients.size} active)`)
-  const stt = new LocalSttSession()
+  const stt = config.sttProvider === 'google' ? new GoogleSttSession() : new LocalSttSession()
   let utteranceId = 0
   let activeSuggestions: ReplySuggestion[] = []
 

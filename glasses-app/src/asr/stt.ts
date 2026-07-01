@@ -14,7 +14,7 @@ export interface ReplySuggestion {
 
 export type BackendMessage =
   | { type: 'transcript'; finalText: string; interimText: string; finished: boolean }
-  | { type: 'suggestions'; heard: string; options: ReplySuggestion[] }
+  | { type: 'suggestions'; heard: string; heardEnglish: string; options: ReplySuggestion[] }
   | { type: 'listening' }
   | { type: 'error'; message: string }
 
