@@ -1,13 +1,13 @@
 {
   "name": "g2-reply-assist-glasses-app",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "pack": "evenhub pack",
+    "pack": "evenhub pack app.json dist -o g2-reply-assist.ehpk",
     "simulate": "evenhub-simulator http://localhost:5173"
   },
   "dependencies": {

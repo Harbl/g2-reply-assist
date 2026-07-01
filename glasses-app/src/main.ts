@@ -27,12 +27,42 @@ function buildWsUrl(serverUrl: string, token: string): string {
     '<div style="padding:24px;font-family:sans-serif;color:#555;">Starting…</div>'
   const bridge = await waitForEvenAppBridge()
 
+  // Create the glasses container immediately so the OS render fires on every
+  // startup — required by Even Hub portal review (shows app initialises correctly).
+  const created = await bridge.createStartUpPageContainer(
+    new CreateStartUpPageContainer({
+      containerTotalNum: 1,
+      textObject: [
+        new TextContainerProperty({
+          xPosition: 0,
+          yPosition: 0,
+          width: 576,
+          height: 288,
+          borderWidth: 0,
+          borderColor: 5,
+          paddingLength: 4,
+          containerID: 1,
+          containerName: 'main',
+          content: 'G2 Reply Assist started\nPlease continue on your phone.',
+          isEventCapture: 1,
+        }),
+      ],
+    }),
+  )
+  if (created !== 0) console.error('createStartUpPageContainer failed:', created)
+
+  const glassesUpdate = (content: string) =>
+    bridge.textContainerUpgrade(
+      new TextContainerUpgrade({ containerID: 1, containerName: 'main', content }),
+    )
+
   const [serverUrl, token] = await Promise.all([
     bridge.getLocalStorage(KEY_SERVER_URL),
     bridge.getLocalStorage(KEY_TOKEN),
   ])
 
   if (!serverUrl || !token) {
+    await glassesUpdate('Setup required\nPlease continue on your phone.')
     mountSetupScreen(async ({ serverUrl: sv, token: tok }) => {
       await Promise.all([
         bridge.setLocalStorage(KEY_SERVER_URL, sv),
@@ -48,28 +78,7 @@ function buildWsUrl(serverUrl: string, token: string): string {
   const initToken = token
 
   mountUi()
-
-  const main = new TextContainerProperty({
-    xPosition: 0,
-    yPosition: 0,
-    width: 576,
-    height: 288,
-    borderWidth: 0,
-    borderColor: 5,
-    paddingLength: 4,
-    containerID: 1,
-    containerName: 'main',
-    content: 'Listening…',
-    isEventCapture: 1,
-  })
-
-  const created = await bridge.createStartUpPageContainer(
-    new CreateStartUpPageContainer({ containerTotalNum: 1, textObject: [main] }),
-  )
-  if (created !== 0) {
-    setStatus('error', `createStartUpPageContainer failed: ${created}`)
-    console.error('Failed to create startup page')
-  }
+  await glassesUpdate('Listening…')
 
   // ── Display state ────────────────────────────────────────────────────────
   type Mode = 'listening' | 'suggestions'
