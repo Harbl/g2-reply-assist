@@ -1,8 +1,8 @@
 {
-  "package_id": "com.example.g2replyassist",
+  "package_id": "com.harbl.g2replyassist",
   "edition": "202601",
   "name": "G2 Reply Assist",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "min_app_version": "2.0.0",
   "min_sdk_version": "0.0.10",
   "entrypoint": "index.html",

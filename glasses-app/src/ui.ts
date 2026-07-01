@@ -69,47 +69,94 @@ export function mountSetupScreen(
   existingValues?: Partial<SetupValues>,
 ) {
   const app = document.querySelector<HTMLDivElement>('#app')!
+  const isReconfigure = !!existingValues?.serverUrl
+
   app.innerHTML = `
     <main class="setup-panel">
-      <header class="setup-header">
-        <h1>G2 Reply Assist</h1>
-        <p class="setup-sub">First-time setup · use your phone to fill this in</p>
-      </header>
 
-      <div class="field-group">
-        <label for="serverUrl">Backend server URL</label>
-        <input id="serverUrl" type="url" autocomplete="off" spellcheck="false"
-          placeholder="wss://your-server.com  or  ws://192.168.x.x:8787"
-          value="${escapeAttr(existingValues?.serverUrl ?? '')}" />
-        <span class="hint">WebSocket URL of your g2-reply-assist backend</span>
+      <div class="setup-hero">
+        <h1 class="setup-title">G2 Reply Assist</h1>
+        <p class="setup-tagline">
+          Real-time Japanese reply suggestions on your G2 glasses.
+          Hear something — see three natural responses in seconds.
+        </p>
       </div>
 
-      <div class="field-group">
-        <label for="token">Auth token</label>
-        <input id="token" type="text" autocomplete="off" spellcheck="false"
-          placeholder="Paste your WS_TOKEN here"
-          value="${escapeAttr(existingValues?.token ?? '')}" />
-        <span class="hint">Matches WS_TOKEN in your backend .env</span>
+      <div class="setup-steps">
+
+        <div class="setup-step">
+          <div class="step-badge">1</div>
+          <div class="step-body">
+            <div class="step-heading">Run the backend server</div>
+            <p class="step-text">
+              This app needs a backend you run on your own hardware or VPS.
+              It handles speech recognition and AI — your credentials stay
+              off the glasses entirely.
+            </p>
+            <a class="repo-link"
+               href="https://github.com/Harbl/g2-reply-assist-backend"
+               target="_blank"
+               rel="noopener noreferrer">
+              github.com/Harbl/g2-reply-assist-backend
+            </a>
+            <p class="step-text step-providers">
+              Supports <strong>local Whisper + Ollama</strong> (free, runs on your GPU)
+              or <strong>Google STT + Claude / OpenAI</strong> (cloud, no GPU needed).
+            </p>
+          </div>
+        </div>
+
+        <div class="setup-step">
+          <div class="step-badge">2</div>
+          <div class="step-body">
+            <div class="step-heading">${isReconfigure ? 'Update your server details' : 'Enter your server details'}</div>
+
+            <div class="field-group">
+              <label for="serverUrl">Backend URL</label>
+              <input
+                id="serverUrl"
+                type="url"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="wss://g2.yourdomain.com"
+                value="${escapeAttr(existingValues?.serverUrl ?? '')}"
+              />
+              <span class="field-hint">WebSocket address of your backend server</span>
+            </div>
+
+            <div class="field-group">
+              <label for="token">Auth token</label>
+              <input
+                id="token"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="Paste your WS_TOKEN here"
+                value="${escapeAttr(existingValues?.token ?? '')}"
+              />
+              <span class="field-hint">The <code>WS_TOKEN</code> value from your backend <code>.env</code></span>
+            </div>
+
+          </div>
+        </div>
+
       </div>
 
       <div id="setup-error" class="setup-error" hidden></div>
 
-      <button id="saveBtn" class="save-btn">Save &amp; Connect</button>
+      <button id="saveBtn" class="save-btn">
+        ${isReconfigure ? 'Reconnect' : 'Save &amp; Connect'}
+      </button>
 
-      <details class="setup-help">
-        <summary>Setup guide</summary>
-        <p>You need to run the backend server yourself. Full instructions at:</p>
-        <p class="repo-link">github.com/Harbl/g2-reply-assist-backend</p>
-        <p>Quick steps:</p>
-        <p>1. Clone the backend repo and run <code>npm install</code>.</p>
-        <p>2. Choose STT: <code>local</code> (Whisper) or <code>google</code> (Google Cloud).</p>
-        <p>3. Choose LLM: <code>openai</code> (Ollama / OpenAI) or <code>anthropic</code> (Claude).</p>
-        <p>4. Set providers and credentials in <code>.env</code>, then <code>npm start</code>.</p>
-        <p>5. Expose port 8787 via Cloudflare Tunnel for WSS internet access.</p>
-        <p>6. Enter the WSS URL and your <code>WS_TOKEN</code> above, then tap Save.</p>
-      </details>
+      ${isReconfigure ? '' : `
+      <p class="setup-footer">
+        Your settings are saved locally on this device and never shared.
+      </p>
+      `}
+
     </main>
   `
+
   injectSetupStyles()
 
   const saveBtn = app.querySelector<HTMLButtonElement>('#saveBtn')!
@@ -120,13 +167,11 @@ export function mountSetupScreen(
     const token = (app.querySelector<HTMLInputElement>('#token')!).value.trim()
 
     if (!serverUrl) {
-      showError(errorEl, 'Server URL is required.')
+      showError(errorEl, 'Backend URL is required.')
       return
     }
-    try {
-      new URL(serverUrl)
-    } catch {
-      showError(errorEl, 'Server URL does not look valid — check the format.')
+    if (!serverUrl.startsWith('ws://') && !serverUrl.startsWith('wss://')) {
+      showError(errorEl, 'URL must start with ws:// or wss://')
       return
     }
     if (!token) {
@@ -176,8 +221,7 @@ function injectStyles() {
     .status-listening  { color: #3CFA44; border-color: #3CFA44; background: rgba(60,250,68,0.08); }
     .status-error      { color: #FF453A; border-color: #FF453A; background: rgba(255,69,58,0.08); }
     .transcript { flex: 1; overflow: auto; background: #2E2E2E; border: 1px solid #3E3E3E;
-      color: #E5E5E5;
-      border-radius: 12px; padding: 20px; font-size: 18px; line-height: 1.5;
+      color: #E5E5E5; border-radius: 12px; padding: 20px; font-size: 18px; line-height: 1.5;
       min-height: 180px; white-space: pre-wrap; word-break: break-word; }
     .interim { color: #919191; }
     .suggestions { display: flex; flex-direction: column; gap: 10px; }
@@ -196,40 +240,103 @@ function injectSetupStyles() {
   const css = `
     :root { color-scheme: dark; }
     *, *::before, *::after { box-sizing: border-box; }
-    html, body { margin: 0; height: 100%; background: #232323; color: #E5E5E5;
-      font: 16px/1.5 -apple-system, BlinkMacSystemFont, 'Helvetica Neue', system-ui, sans-serif;
+    html, body {
+      margin: 0; background: #1A1A1A; color: #E5E5E5;
+      font: 15px/1.5 -apple-system, BlinkMacSystemFont, 'Helvetica Neue', system-ui, sans-serif;
       touch-action: manipulation; -webkit-text-size-adjust: 100%;
-      overscroll-behavior: none; }
-    #app { display: flex; min-height: 100%; }
-    .setup-panel { width: 100%; max-width: 600px; margin: 0 auto;
-      padding: 28px 24px 40px; display: flex; flex-direction: column; gap: 20px; }
-    .setup-header { display: flex; flex-direction: column; gap: 4px; }
-    .setup-header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: 0.02em; }
-    .setup-sub { margin: 0; font-size: 13px; color: #919191; }
-    .field-group { display: flex; flex-direction: column; gap: 6px; }
-    label { font-size: 13px; font-weight: 600; color: #C0C0C0; letter-spacing: 0.03em; }
-    input { background: #2E2E2E; border: 1px solid #3E3E3E; border-radius: 10px;
+      overscroll-behavior: none;
+    }
+    #app { display: flex; min-height: 100vh; }
+
+    /* ── Layout ── */
+    .setup-panel {
+      width: 100%; max-width: 560px; margin: 0 auto;
+      padding: 32px 20px 48px;
+      display: flex; flex-direction: column; gap: 28px;
+    }
+
+    /* ── Hero ── */
+    .setup-hero { display: flex; flex-direction: column; gap: 8px; }
+    .setup-title {
+      margin: 0; font-size: 26px; font-weight: 700;
+      letter-spacing: -0.01em; color: #F0F0F0;
+    }
+    .setup-tagline {
+      margin: 0; font-size: 14px; line-height: 1.6; color: #A0A0A0;
+    }
+
+    /* ── Steps ── */
+    .setup-steps { display: flex; flex-direction: column; gap: 0; }
+    .setup-step {
+      display: flex; gap: 16px; padding: 24px 0;
+      border-top: 1px solid #2A2A2A;
+    }
+    .setup-step:last-child { border-bottom: 1px solid #2A2A2A; }
+
+    .step-badge {
+      flex-shrink: 0;
+      width: 30px; height: 30px; border-radius: 50%;
+      border: 1.5px solid #3CFA44; color: #3CFA44;
+      font-size: 13px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      margin-top: 2px;
+    }
+    .step-body { display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0; }
+    .step-heading { font-size: 15px; font-weight: 700; color: #F0F0F0; }
+    .step-text { margin: 0; font-size: 13px; color: #A0A0A0; line-height: 1.6; }
+    .step-providers { border-left: 2px solid #2E2E2E; padding-left: 10px; margin-top: 2px; }
+    .step-providers strong { color: #C8C8C8; }
+
+    /* ── Repo link ── */
+    .repo-link {
+      display: inline-block;
+      background: rgba(60, 250, 68, 0.08);
+      border: 1px solid rgba(60, 250, 68, 0.3);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+      font-size: 12px; color: #3CFA44;
+      text-decoration: none;
+      word-break: break-all;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .repo-link:hover { background: rgba(60,250,68,0.14); border-color: rgba(60,250,68,0.55); }
+
+    /* ── Fields ── */
+    .field-group { display: flex; flex-direction: column; gap: 5px; }
+    label { font-size: 12px; font-weight: 600; color: #909090; letter-spacing: 0.06em; text-transform: uppercase; }
+    input {
+      background: #242424; border: 1px solid #333; border-radius: 10px;
       color: #E5E5E5; font-size: 15px; padding: 12px 14px; width: 100%;
-      outline: none; transition: border-color 0.15s; }
-    input:focus { border-color: #3CFA44; }
-    input::placeholder { color: #5E5E5E; }
-    .hint { font-size: 12px; color: #7B7B7B; }
-    .setup-error { background: rgba(255,69,58,0.12); border: 1px solid #FF453A;
-      border-radius: 8px; color: #FF453A; font-size: 13px; padding: 10px 14px; }
-    .save-btn { background: #3CFA44; color: #111; border: none; border-radius: 12px;
-      font-size: 16px; font-weight: 700; padding: 14px; cursor: pointer;
-      letter-spacing: 0.02em; transition: opacity 0.15s; }
-    .save-btn:active { opacity: 0.75; }
-    .setup-help { background: #2E2E2E; border: 1px solid #3E3E3E; border-radius: 10px;
-      padding: 12px 16px; font-size: 13px; color: #C0C0C0; }
-    .setup-help summary { cursor: pointer; font-weight: 600; color: #E5E5E5;
-      list-style: none; }
-    .setup-help summary::-webkit-details-marker { display: none; }
-    .setup-help summary::before { content: '▶ '; font-size: 10px; }
-    details[open] .setup-help summary::before { content: '▼ '; }
-    .setup-help p { margin: 8px 0 0; }
-    code { background: #3E3E3E; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
-    .repo-link { color: #3CFA44; font-family: monospace; font-size: 13px; word-break: break-all; }
+      outline: none; transition: border-color 0.15s;
+      font-family: inherit;
+    }
+    input:focus { border-color: #3CFA44; background: #262626; }
+    input::placeholder { color: #484848; }
+    .field-hint { font-size: 12px; color: #606060; }
+    code { background: #2E2E2E; border-radius: 4px; padding: 1px 5px; font-size: 11px; font-family: ui-monospace, monospace; }
+
+    /* ── Error ── */
+    .setup-error {
+      background: rgba(255, 69, 58, 0.1); border: 1px solid rgba(255, 69, 58, 0.4);
+      border-radius: 8px; color: #FF6B63; font-size: 13px; padding: 11px 14px;
+    }
+
+    /* ── Save button ── */
+    .save-btn {
+      background: #3CFA44; color: #0A0A0A; border: none; border-radius: 12px;
+      font-size: 16px; font-weight: 700; padding: 15px;
+      cursor: pointer; letter-spacing: 0.01em;
+      transition: opacity 0.15s, transform 0.1s;
+      width: 100%;
+    }
+    .save-btn:active { opacity: 0.8; transform: scale(0.99); }
+
+    /* ── Footer note ── */
+    .setup-footer {
+      margin: 0; text-align: center;
+      font-size: 12px; color: #484848; line-height: 1.5;
+    }
   `
   addStyle(css)
 }

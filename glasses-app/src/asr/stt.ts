@@ -1,10 +1,9 @@
-// WebSocket client for our own backend (see /backend).
+// WebSocket client for the g2-reply-assist backend.
 //
 // The G2 mic emits PCM s16le @ 16 kHz, mono via `bridge.audioControl(true)`.
-// Each chunk is forwarded as a binary WebSocket frame. The backend runs the
-// actual STT (Google Cloud Speech, ja-JP) and reply-suggestion generation
-// (Claude) server-side, since both need credentials that must never ship to
-// the glasses app, and Google's streaming client only works in Node.
+// Each chunk is forwarded as a binary WebSocket frame. The backend handles
+// speech-to-text (local Whisper or Google Cloud STT) and reply suggestion
+// generation (Ollama, OpenAI, or Anthropic) — credentials stay server-side.
 
 export interface ReplySuggestion {
   japanese: string
