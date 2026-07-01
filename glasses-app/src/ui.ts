@@ -98,12 +98,15 @@ export function mountSetupScreen(
 
       <details class="setup-help">
         <summary>Setup guide</summary>
-        <p>1. Clone <code>g2-reply-assist</code> and follow SETUP.txt to run the backend on your server.</p>
-        <p>2. Choose STT: local Whisper (faster-whisper-server) or Google Cloud STT.</p>
-        <p>3. Choose LLM: Ollama/OpenAI-compatible or Anthropic Claude.</p>
-        <p>4. Set <code>STT_PROVIDER</code>, <code>LLM_PROVIDER</code>, and credentials in <code>backend/.env</code>.</p>
-        <p>5. Expose port 8787 via Cloudflare Tunnel or direct port forwarding for WSS.</p>
-        <p>6. Enter the WSS URL and your WS_TOKEN above, then tap Save.</p>
+        <p>You need to run the backend server yourself. Full instructions at:</p>
+        <p class="repo-link">github.com/Harbl/g2-reply-assist-backend</p>
+        <p>Quick steps:</p>
+        <p>1. Clone the backend repo and run <code>npm install</code>.</p>
+        <p>2. Choose STT: <code>local</code> (Whisper) or <code>google</code> (Google Cloud).</p>
+        <p>3. Choose LLM: <code>openai</code> (Ollama / OpenAI) or <code>anthropic</code> (Claude).</p>
+        <p>4. Set providers and credentials in <code>.env</code>, then <code>npm start</code>.</p>
+        <p>5. Expose port 8787 via Cloudflare Tunnel for WSS internet access.</p>
+        <p>6. Enter the WSS URL and your <code>WS_TOKEN</code> above, then tap Save.</p>
       </details>
     </main>
   `
@@ -226,6 +229,7 @@ function injectSetupStyles() {
     details[open] .setup-help summary::before { content: '▼ '; }
     .setup-help p { margin: 8px 0 0; }
     code { background: #3E3E3E; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+    .repo-link { color: #3CFA44; font-family: monospace; font-size: 13px; word-break: break-all; }
   `
   addStyle(css)
 }
