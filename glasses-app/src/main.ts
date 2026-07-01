@@ -8,14 +8,9 @@ import {
 import { connectBackend, type ReplySuggestion } from './asr/stt'
 import { mountUi, mountSetupScreen, setStatus, setTranscript, setSuggestions } from './ui'
 
-// ── Config resolution (env vars → localStorage → setup screen) ────────────
-//
-// Vite bakes VITE_* env vars into the bundle at build time, so they survive
-// Even Hub clearing WebView storage between sessions. localStorage is kept as
-// a fallback for public/shared use when env vars aren't set.
-
-const LS_SERVER_URL = 'g2ra.serverUrl'
-const LS_TOKEN = 'g2ra.token'
+// Native bridge storage keys — persists across app sessions unlike WebView localStorage
+const KEY_SERVER_URL = 'g2ra.serverUrl'
+const KEY_TOKEN = 'g2ra.token'
 
 function buildWsUrl(serverUrl: string, token: string): string {
   const u = new URL(serverUrl)
@@ -23,36 +18,36 @@ function buildWsUrl(serverUrl: string, token: string): string {
   return u.toString()
 }
 
-function getConfig(): { serverUrl: string; token: string } | null {
-  const envUrl = import.meta.env.VITE_SERVER_URL as string | undefined
-  const envToken = import.meta.env.VITE_WS_TOKEN as string | undefined
-  if (envUrl && envToken) return { serverUrl: envUrl, token: envToken }
-  const serverUrl = localStorage.getItem(LS_SERVER_URL)
-  const token = localStorage.getItem(LS_TOKEN)
-  if (serverUrl && token) return { serverUrl, token }
-  return null
-}
-
 // ── Entry point ────────────────────────────────────────────────────────────
 
 ;(async () => {
-  const saved = getConfig()
+  // Get bridge first — native bridge.getLocalStorage/setLocalStorage persists
+  // across app sessions. Even Hub clears WebView localStorage on close.
+  document.getElementById('app')!.innerHTML =
+    '<div style="padding:24px;font-family:sans-serif;color:#555;">Starting…</div>'
+  const bridge = await waitForEvenAppBridge()
 
-  if (!saved) {
-    mountSetupScreen(({ serverUrl, token }) => {
-      localStorage.setItem(LS_SERVER_URL, serverUrl)
-      localStorage.setItem(LS_TOKEN, token)
+  const [serverUrl, token] = await Promise.all([
+    bridge.getLocalStorage(KEY_SERVER_URL),
+    bridge.getLocalStorage(KEY_TOKEN),
+  ])
+
+  if (!serverUrl || !token) {
+    mountSetupScreen(async ({ serverUrl: sv, token: tok }) => {
+      await Promise.all([
+        bridge.setLocalStorage(KEY_SERVER_URL, sv),
+        bridge.setLocalStorage(KEY_TOKEN, tok),
+      ])
       location.reload()
     })
     return
   }
 
-  // Destructure here so closures below see plain string types (not string | null).
-  const { serverUrl: initServerUrl, token: initToken } = saved
+  // ── Normal app flow ──────────────────────────────────────────────────────
+  const initServerUrl = serverUrl
+  const initToken = token
 
   mountUi()
-
-  const bridge = await waitForEvenAppBridge()
 
   const main = new TextContainerProperty({
     xPosition: 0,
@@ -147,16 +142,13 @@ function getConfig(): { serverUrl: string; token: string } | null {
       const msg = (err as Error)?.message ?? String(err)
       setStatus('error', `Connection failed: ${msg}`)
       console.error('Backend connection error:', err)
-      // After a connection failure offer a way to reconfigure without a full rebuild
       offerReconfigure()
     },
   )
 
   function offerReconfigure() {
     const app = document.querySelector<HTMLDivElement>('#app')
-    if (!app) return
-    // Only inject the button once
-    if (app.querySelector('.reconfigure-btn')) return
+    if (!app || app.querySelector('.reconfigure-btn')) return
     const btn = document.createElement('button')
     btn.className = 'reconfigure-btn'
     btn.textContent = 'Change server settings'
@@ -167,9 +159,11 @@ function getConfig(): { serverUrl: string; token: string } | null {
     ].join(';')
     btn.addEventListener('click', () => {
       mountSetupScreen(
-        ({ serverUrl, token }) => {
-          localStorage.setItem(LS_SERVER_URL, serverUrl)
-          localStorage.setItem(LS_TOKEN, token)
+        async ({ serverUrl: sv, token: tok }) => {
+          await Promise.all([
+            bridge.setLocalStorage(KEY_SERVER_URL, sv),
+            bridge.setLocalStorage(KEY_TOKEN, tok),
+          ])
           location.reload()
         },
         { serverUrl: initServerUrl, token: initToken },
